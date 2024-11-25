@@ -1,6 +1,7 @@
 package ma.wem.springsecurityapp.security;
 
 import ma.wem.springsecurityapp.auth.ApplicationUserService;
+import ma.wem.springsecurityapp.jwt.JwtUsernameAndPasswordAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,15 +11,18 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+import org.springframework.security.config.annotation.web.WebSecurityConfigurer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
@@ -29,7 +33,7 @@ import static ma.wem.springsecurityapp.security.ApplicationUserRole.*;
 @Configuration
 @EnableWebSecurity
 @EnableGlobalMethodSecurity(prePostEnabled = true)
-public class SecurityConfig {
+public class SecurityConfig  {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationUserService applicationUserService;
 
@@ -39,9 +43,18 @@ public class SecurityConfig {
 
         this.applicationUserService = applicationUserService;
     }
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
+    }
+
+
+
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,AuthenticationManager authManager) throws Exception {
+        JwtUsernameAndPasswordAuthenticationFilter jwtAuthenticationFilter =
+                new JwtUsernameAndPasswordAuthenticationFilter(authManager);
         http
 //                .csrf(csrf -> csrf
 //                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
@@ -54,26 +67,32 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
 
                 )
-                .formLogin(
-                        (form -> form
-                                .loginPage("/login")
-                                .defaultSuccessUrl("/services",true)
-                                .passwordParameter("password")
-                                .usernameParameter("username")
-                                .permitAll()))
-                .rememberMe(remember -> remember
-                        .key("verysec")
-                        .tokenValiditySeconds((int) TimeUnit.DAYS.toSeconds(21))
-                        .rememberMeParameter("remember-me") // Name of the checkbox parameter in the login form
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS) // Stateless session management
                 )
-                .logout(logout -> logout
-                        .logoutUrl("/logout")
-                        .logoutRequestMatcher(new AntPathRequestMatcher("/logout", "GET"))
-                        .clearAuthentication(true)
-                        .invalidateHttpSession(true)
-                        .deleteCookies("JSESSIONID", "remember-me")
-                        .logoutSuccessUrl("/login")
-                );
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        ;
+//                .formLogin(
+//                        (form -> form
+//                                .loginPage("/login")
+//                                .defaultSuccessUrl("/services",true)
+//                                .passwordParameter("password")
+//                                .usernameParameter("username")
+//                                .permitAll()))
+//                .rememberMe(remember -> remember
+//                        .key("verysec")
+//                        .tokenValiditySeconds((int) TimeUnit.DAYS.toSeconds(21))
+//                        .rememberMeParameter("remember-me") // Name of the checkbox parameter in the login form
+//                )
+//                .logout(logout -> logout
+//                        .logoutUrl("/logout")
+//                        .logoutRequestMatcher(new AntPathRequestMatcher("/logout", "GET"))
+//                        .clearAuthentication(true)
+//                        .invalidateHttpSession(true)
+//                        .deleteCookies("JSESSIONID", "remember-me")
+//                        .logoutSuccessUrl("/login")
+//                );
 
                 //.formLogin(Customizer.withDefaults());
 
